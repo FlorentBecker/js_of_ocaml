@@ -20,7 +20,19 @@
 let js_string_of_float f = (Js.number_of_float f)##toString()
 let js_string_of_int i = (Js.number_of_float (float_of_int i))##toString()
 
+
+module type Xml_dom =
+  Xml_sigs.Wrapped
+  with type uri = string
+   and type event_handler = Dom_html.event Js.t -> bool
+   and type mouse_event_handler = Dom_html.mouseEvent Js.t -> bool
+   and type keyboard_event_handler = Dom_html.keyboardEvent Js.t -> bool
+   and type elt = Dom.node Js.t
+
+
 module Xml = struct
+
+  module W = Xml_wrap.NoWrap
 
   type 'a wrap = 'a
   type 'a list_wrap = 'a list
@@ -106,7 +118,9 @@ end
 module Svg = Svg_f.Make(Xml)
 module Html5 = Html5_f.Make(Xml)(Svg)
 
-module Xml_wrap = struct
+
+
+module React_Wrap = struct
   type 'a t = 'a React.signal
   type 'a tlist = 'a ReactiveData.RList.t
   let return = React.S.const
@@ -117,7 +131,6 @@ module Xml_wrap = struct
   let map f = ReactiveData.RList.map f
   let append x y = ReactiveData.RList.concat x y
 end
-
 
 module Util = struct
   open ReactiveData
@@ -179,63 +192,63 @@ module Util = struct
     in ()
 end
 
+module Xml_wrapped = struct
+  module W = React_Wrap
+  type 'a wrap = 'a W.t
+  type 'a list_wrap = 'a W.tlist
+  type uri = Xml.uri
+  let string_of_uri = Xml.string_of_uri
+  let uri_of_string = Xml.uri_of_string
+  type aname = Xml.aname
+  type event_handler = Xml.event_handler
+  type mouse_event_handler = Xml.mouse_event_handler
+  type keyboard_event_handler = Xml.keyboard_event_handler
+  type attrib = Xml.attrib
+
+  let attr name f s =
+    let a = Dom_html.document##createAttribute(Js.string name) in
+    let _ = W.fmap (fun s -> match f s with
+        | None -> ()
+        | Some v -> a##value <- v) s in
+    name,Xml.Attr a
+
+  let float_attrib name s = attr name (fun f -> Some (js_string_of_float f)) s
+  let int_attrib name s = attr name (fun f -> Some (js_string_of_int f)) s
+  let string_attrib name s = attr name (fun f -> Some (Js.string f)) s
+  let space_sep_attrib name s = attr name (fun f -> Some (Js.string (String.concat " " f))) s
+  let comma_sep_attrib name s = attr name (fun f -> Some (Js.string (String.concat "," f))) s
+  let event_handler_attrib name s = Xml.event_handler_attrib name s
+  let mouse_event_handler_attrib name s = Xml.mouse_event_handler_attrib name s
+  let keyboard_event_handler_attrib name s = Xml.keyboard_event_handler_attrib name s
+  let string_attrib name s = attr name (fun f -> Some (Js.string f)) s
+  let uri_attrib name s = attr name (fun f -> Some (Js.string f)) s
+  let uris_attrib name s = attr name (fun f -> Some (Js.string (String.concat " " f))) s
+
+  type elt = Xml.elt
+  type ename = Xml.ename
+
+  let empty = Xml.empty
+  let comment = Xml.comment
+  let pcdata s =
+    let e = Dom_html.document##createTextNode(Js.string "") in
+    let _ = React.S.map (fun s -> e##data <- Js.string s) s in
+    (e :> Dom.node Js.t)
+  let encodedpcdata s = pcdata s
+  let entity s = Xml.entity s
+  let leaf = Xml.leaf
+  let node ?(a=[]) name l =
+    let e = Dom_html.document##createElement(Js.string name) in
+    Xml.attach_attribs e a;
+    Util.update_children (e :> Dom.node Js.t) l;
+    (e :> Dom.node Js.t)
+  let cdata = Xml.cdata
+  let cdata_script = Xml.cdata_script
+  let cdata_style = Xml.cdata_style
+end
 
 module R = struct
-  module Xml_wed = struct
-    type 'a wrap = 'a Xml_wrap.t
-    type 'a list_wrap = 'a Xml_wrap.tlist
-    type uri = Xml.uri
-    let string_of_uri = Xml.string_of_uri
-    let uri_of_string = Xml.uri_of_string
-    type aname = Xml.aname
-    type event_handler = Xml.event_handler
-    type mouse_event_handler = Xml.mouse_event_handler
-    type keyboard_event_handler = Xml.keyboard_event_handler
-    type attrib = Xml.attrib
-
-    let attr name f s =
-      let a = Dom_html.document##createAttribute(Js.string name) in
-      let _ = Xml_wrap.fmap (fun s -> match f s with
-          | None -> ()
-          | Some v -> a##value <- v) s in
-      name,Xml.Attr a
-
-    let float_attrib name s = attr name (fun f -> Some (js_string_of_float f)) s
-    let int_attrib name s = attr name (fun f -> Some (js_string_of_int f)) s
-    let string_attrib name s = attr name (fun f -> Some (Js.string f)) s
-    let space_sep_attrib name s = attr name (fun f -> Some (Js.string (String.concat " " f))) s
-    let comma_sep_attrib name s = attr name (fun f -> Some (Js.string (String.concat "," f))) s
-    let event_handler_attrib name s = Xml.event_handler_attrib name s
-    let mouse_event_handler_attrib name s = Xml.mouse_event_handler_attrib name s
-    let keyboard_event_handler_attrib name s = Xml.keyboard_event_handler_attrib name s
-    let string_attrib name s = attr name (fun f -> Some (Js.string f)) s
-    let uri_attrib name s = attr name (fun f -> Some (Js.string f)) s
-    let uris_attrib name s = attr name (fun f -> Some (Js.string (String.concat " " f))) s
-
-    type elt = Xml.elt
-    type ename = Xml.ename
-
-    let empty = Xml.empty
-    let comment = Xml.comment
-    let pcdata s =
-      let e = Dom_html.document##createTextNode(Js.string "") in
-      let _ = React.S.map (fun s -> e##data <- Js.string s) s in
-      (e :> Dom.node Js.t)
-    let encodedpcdata s = pcdata s
-    let entity s = Xml.entity s
-    let leaf = Xml.leaf
-    let node ?(a=[]) name l =
-      let e = Dom_html.document##createElement(Js.string name) in
-      Xml.attach_attribs e a;
-      Util.update_children (e :> Dom.node Js.t) l;
-      (e :> Dom.node Js.t)
-    let cdata = Xml.cdata
-    let cdata_script = Xml.cdata_script
-    let cdata_style = Xml.cdata_style
-  end
-
-  module Svg = Svg_f.MakeWrapped(Xml_wrap)(Xml_wed)
-  module Html5 = Html5_f.MakeWrapped(Xml_wrap)(Xml_wed)(Svg)
+  module Svg = Svg_f.Make(Xml_wrapped)
+  module Html5 = Html5_f.Make(Xml_wrapped)(Svg)
 end
 
 module To_dom = Tyxml_cast.MakeTo(struct
